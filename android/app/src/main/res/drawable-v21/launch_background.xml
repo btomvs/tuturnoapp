@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Color de fondo simple -->
+    <item android:drawable="@android:color/white" />
+    <!-- Si algún plugin añadió un logo, puede aparecer otro <item> aquí -->
+
+    <item>
+        <bitmap
+            android:gravity='center'
+            android:src='@mipmap/tuturno_logo_app'/>
+    </item>
+</layer-list>

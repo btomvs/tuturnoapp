@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "390462795223",
+    "project_id": "tuturno-92217",
+    "storage_bucket": "tuturno-92217.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:390462795223:android:3a3aee962ea15084412f92",
+        "android_client_info": {
+          "package_name": "com.tuturno.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2C7qn7aA61mHvgEeTFesBnkDmc3Yn4To"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
