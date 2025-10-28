@@ -17,70 +17,74 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final _usuarioCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
 
   bool _loading = false;
   String? _error;
 
   @override
   void dispose() {
-    _usuarioCtrl.dispose();
-    _passwordCtrl.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
     super.dispose();
   }
 
   //Logica del Login
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
+      //Login con Email y Contraseña
       final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _usuarioCtrl.text.trim(),
-        password: _passwordCtrl.text
+        email: _emailCtrl.text.trim(),
+        password: _passCtrl.text,
       );
 
-    
+      final uid = cred.user!.uid;
+      final snap = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(uid)
+          .get();
 
-    final uid = cred.user!.uid;
-    final snap = await FirebaseFirestore.instance
-    .collection('usuarios')
-    .doc(uid)
-    .get();
+      if (!snap.exists) {
+        // Si el doc no existe, lo creamos con mínimos (opcional).
+        await FirebaseFirestore.instance.collection('usuarios').doc(uid).set({
+          'nombre': cred.user!.email,
+          'email': cred.user!.email,
+          'estado': 'activo',
+          'rol': 'trabajador',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
 
-    if (!snap.exists){
-      await FirebaseAuth.instance.signOut();
-      throw Exception('Cuenta no registrada, consulta con tu administrador.');
+      final data =
+          (await FirebaseFirestore.instance
+                  .collection('usuarios')
+                  .doc(uid)
+                  .get())
+              .data()!;
+
+      final estado = (data['estado'] ?? '').toString().toLowerCase();
+      if (estado != 'activo') {
+        await FirebaseAuth.instance.signOut();
+        throw Exception('Tu cuenta esta inactiva. Contacta a RRHH.');
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, 'home');
+    } on FirebaseAuthException catch (e) {
+      setState(() => _error = e.message ?? 'Error de autenticación');
+    } catch (e) {
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-
-    final data = snap.data()!;
-    final estado = (data['estado'] ?? '').toString().toLowerCase();
-    if (estado != 'activo'){
-      await FirebaseAuth.instance.signOut();
-      throw Exception('Tu cuenta esta inactiva. Contacta a RRHH.');
-    }
-
-    final rol = (data['role'] ?? '').toString().toLowerCase();
-    const rolesPermitidos = ['trabajador', 'supervisor', 'rrhh'];
-    if (!rolesPermitidos.contains(rol)) {
-      await FirebaseAuth.instance.signOut();
-      throw Exception('Tu rol no tiene acceso a la app móvil.');
-    }
-
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, 'home');
-  } catch (e) {
-    setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
-  } finally {
-    if (mounted) setState(() => _loading = false);
   }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -133,62 +137,31 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     children: [
                       TextFormField(
-                        controller: _usuarioCtrl,
+                        controller: _emailCtrl,
                         style: const TextStyle(color: AppColors.claro),
                         autocorrect: false,
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
                         decoration: InputDecorations.inputDecoration(
-                          hintText: 'DNI o Correo electronico',
+                          hintText: 'Correo electronico',
                           labelText: 'Usuario',
                           icono: Icon(Icons.person_2_outlined),
                         ),
-                        //Limpiar cuando no es correo
-                        onChanged: (txt) {
-                          final looksLikeRut = RegExp(
-                            r'^[0-9.\-\sKk]+$',
-                          ).hasMatch(txt);
-                          if (!looksLikeRut) {
-                            return;
-                          }
-                          //DNI sin digito verificador
-                          final cleaned = txt
-                              .split('-')
-                              .first
-                              .replaceAll(RegExp(r'\D'), '');
-                          if (cleaned != txt) {
-                            _usuarioCtrl.value = TextEditingValue(
-                              text: cleaned,
-                              selection: TextSelection.collapsed(
-                                offset: cleaned.length,
-                              ),
-                            );
-                          }
-                        },
-                        validator: (value) {
-                          final v = (value ?? '').trim();
-                          if (v.isEmpty) return 'Este campo es obligatorio';
-                          //Email
-                          const emailPattern =
-                              r'^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@'
-                              r'((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|'
-                              r'(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$';
-                          final isEmail = RegExp(emailPattern).hasMatch(v);
-                          // DNI
-                          final rutBody = v
-                              .split('-')
-                              .first
-                              .replaceAll(RegExp(r'\D'), '');
-                          final isRutBody = RegExp(
-                            r'^\d{6,9}$',
-                          ).hasMatch(rutBody);
-                          return (isEmail || isRutBody)
-                              ? null
-                              : 'Ingresa un correo válido o un DNI';
+
+                        validator: (v) {
+                          final s = (v ?? '').trim();
+                          if (s.isEmpty) return 'Ingresa tu correo';
+                          final ok = RegExp(
+                            r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                          ).hasMatch(s);
+                          return ok ? null : 'Correo no válido';
                         },
                       ),
+
                       const SizedBox(height: 30),
+
                       TextFormField(
+                        controller: _passCtrl,
                         style: const TextStyle(color: AppColors.claro),
                         obscureText: true,
                         autocorrect: false,
@@ -198,9 +171,9 @@ class _LoginPageState extends State<LoginPage> {
                           icono: Icon(Icons.lock_outline),
                         ),
                         validator: (value) {
-                          return (value != null && value.length >= 4)
+                          return (value != null && value.length >= 6)
                               ? null
-                              : 'Ingrese al menos 4 caracteres';
+                              : 'Ingrese al menos 6 caracteres';
                         },
                       ),
                       const SizedBox(height: 30),
@@ -210,7 +183,7 @@ class _LoginPageState extends State<LoginPage> {
                           _error!,
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: Colors.red),
-                          ),
+                        ),
 
                       const SizedBox(height: 10),
 
@@ -221,37 +194,17 @@ class _LoginPageState extends State<LoginPage> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: AppColors.oscuro,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
+                          child: Text(_loading ? 'Verificando...' : 'Ingresar'),
                         ),
-                        child: Text(_loading ? 'Verificando...' : 'Ingresar'),
-                        ),
-                      )
-
-
-                      // MaterialButton(
-                      //   shape: RoundedRectangleBorder(
-                      //     borderRadius: BorderRadiusGeometry.circular(10),
-                      //   ),
-                      //   disabledColor: Colors.grey,
-                      //   color: AppColors.primary,
-                      //   child: Container(
-                      //     padding: EdgeInsets.symmetric(
-                      //       horizontal: 20,
-                      //       vertical: 10,
-                      //     ),
-                      //     child: Text(
-                      //       'Ingresar',
-                      //       style: TextStyle(color: AppColors.oscuro),
-                      //     ),
-                      //   ),
-                      //   onPressed: () {
-                      //     Navigator.pushReplacementNamed(context, 'home');
-                      //   },
-                      // ),
+                      ),
                     ],
                   ),
                 ),

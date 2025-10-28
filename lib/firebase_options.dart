@@ -54,9 +54,10 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyD2C7qn7aA61mHvgEeTFesBnkDmc3Yn4To',
-    appId: '1:390462795223:android:3a3aee962ea15084412f92',
+    appId: '1:390462795223:android:e1cc38440584ef1f412f92',
     messagingSenderId: '390462795223',
     projectId: 'tuturno-92217',
     storageBucket: 'tuturno-92217.firebasestorage.app',
   );
+
 }

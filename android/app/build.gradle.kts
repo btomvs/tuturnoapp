@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.tuturno.app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -26,7 +26,8 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 35
+        multiDexEnabled = true
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -45,11 +46,8 @@ flutter {
 }
 
 dependencies {
-    // BoM de Firebase: mantiene versiones alineadas de los SDK nativos
-    implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
-
-    // No agregues libs nativas extras si usas FlutterFire.
-    // Descomenta solo si vas a usar SDK nativo en Kotlin/Java:
-    // implementation("com.google.firebase:firebase-analytics")
-    // implementation("com.google.firebase:firebase-messaging")
+    implementation(platform("com.google.firebase:firebase-bom:33.1.1"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-messaging")
+    
 }
