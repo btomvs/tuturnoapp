@@ -5,6 +5,7 @@ import 'package:tuturnoapp/screens/home_screen.dart';
 
 //Firebase
 import 'package:firebase_core/firebase_core.dart';
+import 'package:tuturnoapp/screens/iconos.dart';
 import 'package:tuturnoapp/screens/register_page.dart';
 import 'firebase_options.dart';
 
@@ -26,6 +27,7 @@ class MainApp extends StatelessWidget {
         'registro': (_) => const RegisterPage(),
         'login': (_) => const LoginPage(),
         'home': (_) => const HomeScreen(),
+        'iconos': (_) => const IconosScreen(),
       },
       initialRoute: 'login',
     );

@@ -1,9 +1,16 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
+// ----- Paleta de Colores -----
 import 'package:tuturnoapp/core/app_colors.dart';
+
+// ----- Widgets -----
 import 'package:tuturnoapp/widgets/avatar.dart';
 import 'package:tuturnoapp/widgets/boton_float.dart';
+import 'package:tuturnoapp/widgets/bienvenido.dart';
+import 'package:tuturnoapp/widgets/boton_entrada.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -90,6 +97,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _registrarEntrada() {
+    if (kDebugMode) {
+      print('Entrada');
+    }
+  }
+
+  void _registrarSalida() {
+    if (kDebugMode) {
+      print('Salida');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -102,6 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
         height: double.infinity,
         child: Stack(
           children: [
+            // ----- Posicion Fondo -----
             fondo(size),
             Positioned(
               top: 80,
@@ -120,13 +140,42 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+
+            // ----- Bienvenido -----
+            Positioned(
+              top: 220,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: const Bienvenido(),
+                ),
+              ),
+            ),
+
+            // ----- Boton Entrada -----
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 220,
+              child: BotonEntrada(
+                onEntrada: _registrarEntrada,
+                onSalida: _registrarSalida,
+              ),
+            ),
+
+            // ----- Posicion Cuadro Turno -----
             Positioned(
               bottom: 350,
               left: 0,
               right: 0,
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 30),
-                child: cuadroLogin(context),
+                child: cuadroHorario(context),
               ),
             ),
           ],
@@ -136,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ----- Cuadro Turno -----
-  Widget cuadroLogin(BuildContext context) {
+  Widget cuadroHorario(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.symmetric(horizontal: 30),
