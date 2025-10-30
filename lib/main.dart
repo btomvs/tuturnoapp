@@ -1,14 +1,11 @@
-import 'package:flutter/material.dart';
-
 //Pantallas
-
+import 'package:flutter/material.dart';
 import 'package:tuturnoapp/screens/login_page.dart';
 import 'package:tuturnoapp/screens/home_screen.dart';
-import 'package:tuturnoapp/screens/pruebaaas.dart';
 
 //Firebase
-
 import 'package:firebase_core/firebase_core.dart';
+import 'package:tuturnoapp/screens/register_page.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -26,9 +23,8 @@ class MainApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'TuTurno App',
       routes: {
-        //'registro': (_) => const RegistroScreen(),
+        'registro': (_) => const RegisterPage(),
         'login': (_) => const LoginPage(),
-        'person': (_) => const PersonIconsGallery(),
         'home': (_) => const HomeScreen(),
       },
       initialRoute: 'login',

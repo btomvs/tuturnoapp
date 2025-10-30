@@ -16,6 +16,20 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return Scaffold(
+      body: SizedBox(
+        width: double.infinity,
+        height: double.infinity,
+        child: Stack(
+          children: [fondo(size), logoLogin(), cuadroLogin(context)],
+        ),
+      ),
+    );
+  }
+
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
@@ -86,30 +100,15 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    return Scaffold(
-      body: SizedBox(
-        width: double.infinity,
-        height: double.infinity,
-        child: Stack(
-          children: [fondo(size), logoLogin(), cuadroLogin(context)],
-        ),
-      ),
-    );
-  }
-
   SingleChildScrollView cuadroLogin(BuildContext context) {
     return SingleChildScrollView(
       child: Column(
         children: [
-          SizedBox(height: 250),
+          SizedBox(height: 300),
           Container(
             padding: EdgeInsets.all(20),
             margin: EdgeInsets.symmetric(horizontal: 30),
             width: double.infinity,
-            //height: 400,
             decoration: BoxDecoration(
               color: AppColors.oscuro,
               borderRadius: BorderRadius.circular(25),
@@ -229,7 +228,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Container logoLogin() {
     return Container(
-      margin: EdgeInsets.only(top: 50),
+      margin: EdgeInsets.only(top: 90),
       width: double.infinity,
       child: Image.asset(
         'assets/images/tuturno_logo_app.png',

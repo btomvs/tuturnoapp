@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.tuturno.app"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
