@@ -5,17 +5,20 @@ import 'package:tuturnoapp/core/app_colors.dart';
 class BotonFloatAuth extends StatelessWidget {
   const BotonFloatAuth({
     super.key,
-    this.configuraciones = 'iconos',
-    this.registerRoute = 'register',
-    //this.configuraciones = 'iconos',
-    this.onTapConfiguraciones,
+    this.cerrarsesion = 'login',
+    this.historial = 'registro',
+    this.turno = 'iconos',
+    this.onTapTurno,
     this.onTapHistorial,
+    this.onTapLogin,
     this.heroTag = 'botonFloatAuth',
   });
 
-  final String configuraciones;
-  final String registerRoute;
-  final VoidCallback? onTapConfiguraciones;
+  final String turno;
+  final String cerrarsesion;
+  final String historial;
+  final VoidCallback? onTapTurno;
+  final VoidCallback? onTapLogin;
   final VoidCallback? onTapHistorial;
   final String heroTag;
 
@@ -32,19 +35,17 @@ class BotonFloatAuth extends StatelessWidget {
       backgroundColor: AppColors.secondary,
       foregroundColor: AppColors.claro,
       children: [
-        // ----- Modificar para que vaya a Configuraciones -----
+        // ----- Boton de Cerrar Sesión -----
         SpeedDialChild(
           backgroundColor: AppColors.secondary,
           foregroundColor: AppColors.claro,
           shape: const CircleBorder(),
-          child: const Icon(Icons.more_vert),
-          label: 'Más',
+          child: const Icon(Icons.exit_to_app),
+          label: 'Cerrar Sesión',
           labelStyle: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),
-          onTap:
-              onTapConfiguraciones ??
-              () => Navigator.pushNamed(context, configuraciones),
+          onTap: onTapLogin ?? () => Navigator.pushNamed(context, cerrarsesion),
         ),
 
         // ----- Modificar para ir a Historial -----
@@ -58,11 +59,10 @@ class BotonFloatAuth extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
           onTap:
-              onTapHistorial ??
-              () => Navigator.pushNamed(context, registerRoute),
+              onTapHistorial ?? () => Navigator.pushNamed(context, historial),
         ),
 
-        // ----- Eliminar debido que es para visualizar los iconos -----
+        // ----- Modificar para que sea Turno -----
         SpeedDialChild(
           backgroundColor: AppColors.secondary,
           foregroundColor: AppColors.claro,
@@ -72,9 +72,7 @@ class BotonFloatAuth extends StatelessWidget {
           labelStyle: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),
-          onTap:
-              onTapHistorial ??
-              () => Navigator.pushNamed(context, configuraciones),
+          onTap: onTapTurno ?? () => Navigator.pushNamed(context, turno),
         ),
       ],
     );

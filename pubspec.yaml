@@ -18,6 +18,8 @@ dependencies:
   flutter_speed_dial: ^7.0.0
   flutter_iconpicker: ^3.4.6
   font_awesome_flutter: ^10.7.0
+  geolocator: ^11.1.0
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

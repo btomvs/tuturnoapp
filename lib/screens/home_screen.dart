@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -11,6 +11,7 @@ import 'package:tuturnoapp/widgets/avatar.dart';
 import 'package:tuturnoapp/widgets/boton_float.dart';
 import 'package:tuturnoapp/widgets/bienvenido.dart';
 import 'package:tuturnoapp/widgets/boton_entrada.dart';
+import 'package:tuturnoapp/widgets/reloj.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -97,18 +98,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _registrarEntrada() {
-    if (kDebugMode) {
-      print('Entrada');
-    }
-  }
-
-  void _registrarSalida() {
-    if (kDebugMode) {
-      print('Salida');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -143,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // ----- Bienvenido -----
             Positioned(
-              top: 220,
+              top: 200,
               left: 0,
               right: 0,
               child: Center(
@@ -157,14 +146,33 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
+            // ----- Reloj -----
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 500,
+              child: StreamBuilder<User?>(
+                stream: FirebaseAuth.instance.authStateChanges(),
+                builder: (context, snap) {
+                  final u = snap.data;
+                  if (u == null) return const SizedBox.shrink();
+                  return Center(child: RelojJornada(uid: u.uid));
+                },
+              ),
+            ),
+
             // ----- Boton Entrada -----
             Positioned(
               left: 16,
               right: 16,
-              bottom: 220,
-              child: BotonEntrada(
-                onEntrada: _registrarEntrada,
-                onSalida: _registrarSalida,
+              bottom: 150,
+              child: SafeArea(
+                top: false,
+                child: BotonEntrada(
+                  onDone: (tipo, ok, error) {
+                    debugPrint('Marcaje $tipo => ok=$ok ${error ?? ""}');
+                  },
+                ),
               ),
             ),
 
