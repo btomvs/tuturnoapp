@@ -4,9 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-/// ---------------------------
-/// Servicio de Jornada
-/// ---------------------------
 class JornadaService {
   final _db = FirebaseFirestore.instance;
 
@@ -26,6 +23,8 @@ class JornadaService {
         'estado': 'pausada',
         'inicioActual': null,
         'trabajadoSegundos': 0,
+        'entradas': 0,
+        'salidas': 0,
         'actualizadoEn': FieldValue.serverTimestamp(),
       });
     }
@@ -37,11 +36,27 @@ class JornadaService {
     await _db.runTransaction((tx) async {
       final snap = await tx.get(ref);
       final data = snap.data()!;
-      if ((data['estado'] as String?) == 'activa') return;
+      final estado = (data['estado'] as String?) ?? 'pausada';
+      final entradasPrev = (data['entradas'] as num?)?.toInt() ?? 0;
+
+      if (estado == 'activa') return;
+
+      final int orden = entradasPrev + 1;
+      final String codigo = 'entrada$orden';
+
       tx.update(ref, {
         'estado': 'activa',
         'inicioActual': FieldValue.serverTimestamp(),
+        'entradas': FieldValue.increment(1),
         'actualizadoEn': FieldValue.serverTimestamp(),
+      });
+
+      final marcaRef = ref.collection('marcas').doc();
+      tx.set(marcaRef, {
+        'tipo': 'entrada',
+        'orden': orden,
+        'codigo': codigo,
+        'createdAt': FieldValue.serverTimestamp(),
       });
     });
   }
@@ -53,17 +68,39 @@ class JornadaService {
       final data = snap.data()!;
       final estado = (data['estado'] as String?) ?? 'pausada';
       final inicio = (data['inicioActual'] as Timestamp?);
-      if (estado != 'activa' || inicio == null) return;
+      final salidasPrev = (data['salidas'] as num?)?.toInt() ?? 0;
+
+      if (estado != 'activa' || inicio == null) {
+        tx.update(ref, {
+          'estado': 'pausada',
+          'inicioActual': null,
+          'actualizadoEn': FieldValue.serverTimestamp(),
+        });
+        return;
+      }
 
       final ahora = DateTime.now();
-      final sec = ahora.difference(inicio.toDate()).inSeconds;
-      final acumulado = (data['trabajadoSegundos'] as num?)?.toInt() ?? 0;
+      final stint = ahora.difference(inicio.toDate()).inSeconds;
+      final acumuladoPrev = (data['trabajadoSegundos'] as num?)?.toInt() ?? 0;
+
+      final int orden = salidasPrev + 1;
+      final String codigo = 'salida$orden';
 
       tx.update(ref, {
         'estado': 'pausada',
         'inicioActual': null,
-        'trabajadoSegundos': acumulado + (sec > 0 ? sec : 0),
+        'trabajadoSegundos': acumuladoPrev + (stint > 0 ? stint : 0),
+        'salidas': FieldValue.increment(1),
         'actualizadoEn': FieldValue.serverTimestamp(),
+      });
+
+      final marcaRef = ref.collection('marcas').doc();
+      tx.set(marcaRef, {
+        'tipo': 'salida',
+        'orden': orden,
+        'codigo': codigo,
+        'createdAt': FieldValue.serverTimestamp(),
+        'stintSegundos': (stint > 0 ? stint : 0),
       });
     });
   }
@@ -78,9 +115,6 @@ class JornadaService {
   }
 }
 
-/// ---------------------------
-/// Reloj (solo tiempo grande)
-/// ---------------------------
 class RelojJornada extends StatefulWidget {
   const RelojJornada({super.key, required this.uid, this.compacto = false});
 
@@ -122,23 +156,20 @@ class _RelojJornadaState extends State<RelojJornada> {
   @override
   Widget build(BuildContext context) {
     final big = TextStyle(
-      fontSize: widget.compacto ? 32 : 56, // más grande por defecto
+      fontSize: widget.compacto ? 32 : 56,
       fontWeight: FontWeight.w700,
-      fontFamily: 'RobotoMono', // monoespaciada para evitar saltos
+      fontFamily: 'RobotoMono',
       letterSpacing: 1.5,
     );
 
     return StreamBuilder<Map<String, dynamic>?>(
       stream: _srv.jornadaDeHoyStream(widget.uid),
       builder: (_, snap) {
-        // valor por defecto mientras carga o si hay error
-        int trabajado = 0;
         String estado = 'pausada';
         Timestamp? inicio;
 
         if (snap.hasData && snap.data != null) {
           final data = snap.data!;
-          trabajado = (data['trabajadoSegundos'] as num?)?.toInt() ?? 0;
           estado = (data['estado'] as String?) ?? 'pausada';
           inicio = (data['inicioActual'] as Timestamp?);
         }
@@ -146,15 +177,17 @@ class _RelojJornadaState extends State<RelojJornada> {
         return ValueListenableBuilder<DateTime>(
           valueListenable: _now,
           builder: (_, now, __) {
-            int stint = 0;
+            int show = 0;
+
             if (estado == 'activa' && inicio != null) {
-              stint = now.difference(inicio.toDate()).inSeconds;
-              if (stint < 0) stint = 0;
+              show = now.difference(inicio.toDate()).inSeconds;
+              if (show < 0) show = 0;
+            } else {
+              show = 0; // pausado -> 00:00:00
             }
-            final total = trabajado + stint;
 
             return Center(
-              child: Text(_fmt(total), style: big, textAlign: TextAlign.center),
+              child: Text(_fmt(show), style: big, textAlign: TextAlign.center),
             );
           },
         );

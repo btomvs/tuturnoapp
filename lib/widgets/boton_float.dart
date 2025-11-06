@@ -6,8 +6,8 @@ class BotonFloatAuth extends StatelessWidget {
   const BotonFloatAuth({
     super.key,
     this.cerrarsesion = 'login',
-    this.historial = 'registro',
-    this.turno = 'iconos',
+    this.historial = 'historial',
+    this.turno = 'turno',
     this.onTapTurno,
     this.onTapHistorial,
     this.onTapLogin,
@@ -54,7 +54,7 @@ class BotonFloatAuth extends StatelessWidget {
           foregroundColor: AppColors.claro,
           shape: const CircleBorder(),
           child: const Icon(Icons.history),
-          label: 'Ir a Historial',
+          label: 'Historial',
           labelStyle: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),
@@ -67,8 +67,8 @@ class BotonFloatAuth extends StatelessWidget {
           backgroundColor: AppColors.secondary,
           foregroundColor: AppColors.claro,
           shape: const CircleBorder(),
-          child: const Icon(Icons.apps),
-          label: 'Ir a Iconos',
+          child: const Icon(Icons.calendar_month),
+          label: 'Turnos',
           labelStyle: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
           ),
