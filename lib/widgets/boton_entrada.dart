@@ -2,9 +2,66 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // 👈 NUEVO
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:tuturnoapp/core/app_colors.dart';
 import 'package:tuturnoapp/widgets/reloj.dart';
+
+/// =========================
+///  GEO-FENCE (top-level)
+/// =========================
+class _GeoCfg {
+  final double lat;
+  final double lng;
+  final double radiusM; // radio en metros
+  final double toleranciaM; // tolerancia adicional
+  final bool enabled;
+
+  const _GeoCfg({
+    required this.lat,
+    required this.lng,
+    required this.radiusM,
+    required this.toleranciaM,
+    required this.enabled,
+  });
+
+  static _GeoCfg? fromMap(Map<String, dynamic>? g) {
+    if (g == null) return null;
+    final enabled = (g['enabled'] == true) || (g['activa'] == true);
+    if (!enabled) return null;
+
+    // Por ahora solo círculo
+    final tipo = (g['tipo'] as String?)?.toLowerCase();
+    if (tipo != 'circle') return null;
+
+    final center = (g['center'] as Map?)?.cast<String, dynamic>();
+    final lat = (center?['lat'] as num?)?.toDouble();
+    final lng = (center?['lng'] as num?)?.toDouble();
+    final radius = (g['radius_m'] as num?)?.toDouble();
+    final tol = ((g['tolerancia_m'] as num?) ?? 0).toDouble();
+
+    if (lat == null || lng == null || radius == null || radius <= 0) {
+      return null;
+    }
+
+    return _GeoCfg(
+      lat: lat,
+      lng: lng,
+      radiusM: radius,
+      toleranciaM: tol,
+      enabled: true,
+    );
+  }
+
+  /// Distancia desde un punto al centro
+  double distanceTo(double plat, double plng) {
+    return Geolocator.distanceBetween(plat, plng, lat, lng);
+  }
+
+  /// ¿El punto cae dentro del radio+tol?
+  bool contains(double plat, double plng) {
+    return distanceTo(plat, plng) <= (radiusM + toleranciaM);
+  }
+}
 
 class BotonEntrada extends StatefulWidget {
   const BotonEntrada({
@@ -38,9 +95,9 @@ class _BotonEntradaState extends State<BotonEntrada> {
   final _srv = JornadaService();
   bool _cargando = false;
 
-  // ====== POLÍTICAS LOCALES (ajusta a tu necesidad) ======
-  static const int _LIMITE_MARCAS_DIA = 4; // 👈 Política de límite diario
-  static const double _ACCURACY_MAX_M = 50; // 👈 Precisión mínima aceptada (m)
+  // ====== POLÍTICAS LOCALES ======
+  static const int _LIMITE_MARCAS_DIA = 4;
+  static const double _ACCURACY_MAX_M = 50;
 
   // ====== Cloud Function para registrar fallos ======
   final HttpsCallable _fnLogFallo = FirebaseFunctions.instance.httpsCallable(
@@ -73,15 +130,13 @@ class _BotonEntradaState extends State<BotonEntrada> {
           if (lat != null) "lat": lat,
           if (lng != null) "lng": lng,
           if (accuracyM != null) "accuracy_m": accuracyM,
-          if (distM != null) "dist_m": distM, // geocerca (hook futuro)
-          if (faceScore != null)
-            "faceScore": faceScore, // biometría (hook futuro)
+          if (distM != null) "dist_m": distM,
+          if (faceScore != null) "faceScore": faceScore,
           if (limitPolicy != null) "limit_policy": limitPolicy,
         },
         "tsCliente": tsCliente,
       });
     } catch (e) {
-      // No interrumpas el flujo por un fallo de logging
       debugPrint('No se pudo registrar marca fallida: $e');
     }
   }
@@ -94,7 +149,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
       textDirection: TextDirection.ltr,
       maxLines: 3,
     )..layout(maxWidth: max);
-    final w = tp.size.width + 32; // + padding horizontal
+    final w = tp.size.width + 32;
     return w.clamp(min, max);
   }
 
@@ -105,13 +160,13 @@ class _BotonEntradaState extends State<BotonEntrada> {
       textDirection: TextDirection.ltr,
       maxLines: 3,
     )..layout(maxWidth: 520);
-    return tp.size.height + 28; // texto + padding vertical
+    return tp.size.height + 28;
   }
 
   double _centerBottomOffset(double snackHeight) {
     final h = MediaQuery.of(context).size.height;
     final kb = MediaQuery.of(context).viewInsets.bottom;
-    return (h - snackHeight) / 2 + kb; // centro vertical
+    return (h - snackHeight) / 2 + kb;
   }
 
   void _showSnackCenter(
@@ -164,9 +219,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
 
   void _showSuccess(String msg) =>
       _showSnackCenter(msg, baseColor: AppColors.oscuro);
-
   void _showInfo(String msg) => _showSnackCenter(msg, baseColor: Colors.indigo);
-
   void _showError(String msg) => _showSnackCenter(
     msg,
     baseColor: Colors.red,
@@ -198,6 +251,24 @@ class _BotonEntradaState extends State<BotonEntrada> {
     );
   }
 
+  // ================== GEO-FENCE ==================
+  Future<_GeoCfg?> _leerGeocerca(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(uid)
+          .get();
+      if (!doc.exists) return null;
+
+      final data = doc.data() ?? <String, dynamic>{};
+      final g = (data['geocerca'] as Map?)?.cast<String, dynamic>();
+      return _GeoCfg.fromMap(g);
+    } catch (e) {
+      debugPrint('No se pudo leer geocerca: $e');
+      return null; // ante error de lectura, no bloqueamos localmente
+    }
+  }
+
   // ================== Perfil ==================
   Future<String> _obtenerNombreSeguro(User user) async {
     String nombre = (user.displayName ?? '').trim();
@@ -218,7 +289,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
         if (full.isNotEmpty) nombre = full;
       }
     } catch (e) {
-      debugPrint('Aviso: lectura de "usuarios" bloqueada o falló: $e');
+      debugPrint('Aviso: lectura de "usuarios" falló: $e');
       _showInfo('No se pudo leer tu perfil. Usaremos un nombre genérico.');
     }
     return nombre;
@@ -248,7 +319,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
       final pos = await _obtenerPosicion();
       final nombre = await _obtenerNombreSeguro(user);
 
-      // ===== 0) Reglas previas: LÍMITE DIARIO =====
+      // ===== 0) LÍMITE DIARIO =====
       final marcasHoy = await _contarMarcasHoy(user.uid);
       if (marcasHoy >= _LIMITE_MARCAS_DIA) {
         await _logFallo(
@@ -262,7 +333,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
         return;
       }
 
-      // ===== 1) Reglas previas: GPS PRECISIÓN =====
+      // ===== 1) GPS PRECISIÓN =====
       if (pos.accuracy > _ACCURACY_MAX_M) {
         await _logFallo(
           uid: user.uid,
@@ -279,7 +350,37 @@ class _BotonEntradaState extends State<BotonEntrada> {
         return;
       }
 
-      // ===== 2) Escritura en MARCAJE =====
+      // ===== 2) GEOFENCE =====
+      final geo = await _leerGeocerca(user.uid);
+      if (geo != null && geo.enabled) {
+        final distM = Geolocator.distanceBetween(
+          pos.latitude,
+          pos.longitude,
+          geo.lat,
+          geo.lng,
+        );
+        final maxM = geo.radiusM + geo.toleranciaM;
+
+        if (distM > maxM) {
+          await _logFallo(
+            uid: user.uid,
+            errorCode: 'E_GEOFENCE_OUT',
+            reason:
+                'Fuera de geocerca (dist=${distM.toStringAsFixed(1)}m > ${maxM.toStringAsFixed(0)}m)',
+            lat: pos.latitude,
+            lng: pos.longitude,
+            accuracyM: pos.accuracy,
+            distM: distM,
+          );
+          _showError(
+            'Estás fuera del perímetro permitido para marcar.\nDistancia ${distM.toStringAsFixed(0)} m (máx ${maxM.toStringAsFixed(0)} m).',
+          );
+          widget.onDone?.call(tipo, false, 'E_GEOFENCE_OUT');
+          return;
+        }
+      }
+
+      // ===== 3) Escritura en MARCAJE =====
       try {
         await FirebaseFirestore.instance.collection('marcaje').add({
           'uid': user.uid,
@@ -295,7 +396,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
         rethrow;
       }
 
-      // ===== 3) Escritura en JORNADAS =====
+      // ===== 4) Escritura en JORNADAS =====
       try {
         if (tipo == 'entrada') {
           await _srv.entrada(user.uid);
@@ -376,7 +477,6 @@ class _BotonEntradaState extends State<BotonEntrada> {
 
     return Row(
       children: [
-        // ----- Botón Entrada -----
         Expanded(
           child: _buildFilled(
             widget.labelEntrada,
@@ -387,7 +487,6 @@ class _BotonEntradaState extends State<BotonEntrada> {
           ),
         ),
         SizedBox(width: widget.separacion),
-        // ----- Botón Salida -----
         Expanded(
           child: _buildFilled(
             widget.labelSalida,
