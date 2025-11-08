@@ -6,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 //Propios
 import 'package:tuturnoapp/core/app_colors.dart';
-import 'package:tuturnoapp/widgets/input_decoration.dart';
+import 'package:tuturnoapp/core/input_decoration.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});

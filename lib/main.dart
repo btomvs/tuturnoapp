@@ -18,8 +18,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // 👇 Fuerza español para Intl y carga símbolos de fecha
-  Intl.defaultLocale = 'es_ES'; // puedes usar 'es_CL' si prefieres
+  Intl.defaultLocale = 'es_ES';
   await initializeDateFormatting('es_ES');
 
   runApp(const MainApp());
@@ -33,8 +32,6 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'TuTurno App',
-
-      // 👇 Español por defecto
       locale: const Locale('es', 'CL'),
       supportedLocales: const [
         Locale('es', 'CL'),
