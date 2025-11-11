@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:tuturnoapp/core/app_colors.dart';
-import 'package:tuturnoapp/widgets/reloj.dart';
+import 'package:tuturnoapp/widgets/reloj.dart'; // JornadaService
 
 /// =========================
 ///  GEO-FENCE (top-level)
@@ -29,15 +29,30 @@ class _GeoCfg {
     final enabled = (g['enabled'] == true) || (g['activa'] == true);
     if (!enabled) return null;
 
-    // Por ahora solo círculo
     final tipo = (g['tipo'] as String?)?.toLowerCase();
-    if (tipo != 'circle') return null;
+    if (tipo != null && tipo != 'circle') return null; // solo círculo
 
-    final center = (g['center'] as Map?)?.cast<String, dynamic>();
-    final lat = (center?['lat'] as num?)?.toDouble();
-    final lng = (center?['lng'] as num?)?.toDouble();
-    final radius = (g['radius_m'] as num?)?.toDouble();
-    final tol = ((g['tolerancia_m'] as num?) ?? 0).toDouble();
+    // center como GeoPoint o como {lat,lng}
+    double? lat;
+    double? lng;
+    final centerAny = g['center'];
+    if (centerAny is GeoPoint) {
+      lat = centerAny.latitude;
+      lng = centerAny.longitude;
+    } else if (centerAny is Map) {
+      final m = centerAny.cast<String, dynamic>();
+      final latAny = m['lat'] ?? m['latitude'];
+      final lngAny = m['lng'] ?? m['longitude'];
+      if (latAny is num) lat = latAny.toDouble();
+      if (lngAny is num) lng = lngAny.toDouble();
+      if (lat == null && latAny is String) lat = double.tryParse(latAny);
+      if (lng == null && lngAny is String) lng = double.tryParse(lngAny);
+    }
+
+    final rawRadius = (g['radius_m'] ?? g['radius']);
+    final rawTol = (g['tolerancia_m'] ?? g['tolerancia'] ?? 0);
+    final radius = rawRadius is num ? rawRadius.toDouble() : null;
+    final tol = rawTol is num ? rawTol.toDouble() : 0.0;
 
     if (lat == null || lng == null || radius == null || radius <= 0) {
       return null;
@@ -52,15 +67,11 @@ class _GeoCfg {
     );
   }
 
-  /// Distancia desde un punto al centro
-  double distanceTo(double plat, double plng) {
-    return Geolocator.distanceBetween(plat, plng, lat, lng);
-  }
+  double distanceTo(double plat, double plng) =>
+      Geolocator.distanceBetween(plat, plng, lat, lng);
 
-  /// ¿El punto cae dentro del radio+tol?
-  bool contains(double plat, double plng) {
-    return distanceTo(plat, plng) <= (radiusM + toleranciaM);
-  }
+  bool contains(double plat, double plng) =>
+      distanceTo(plat, plng) <= (radiusM + toleranciaM);
 }
 
 class BotonEntrada extends StatefulWidget {
@@ -99,15 +110,48 @@ class _BotonEntradaState extends State<BotonEntrada> {
   static const int _LIMITE_MARCAS_DIA = 4;
   static const double _ACCURACY_MAX_M = 50;
 
-  // ====== Cloud Function para registrar fallos ======
+  // ====== Cloud Function opcional para log ======
   final HttpsCallable _fnLogFallo = FirebaseFunctions.instance.httpsCallable(
     'logMarcaFallida',
   );
 
+  // ====== Registro local de fallos en /marcas_fallidas ======
+  Future<void> _guardarFalloLocal({
+    required String uid,
+    required String tipo, // 'entrada' | 'salida'
+    required String motivo, // texto visible
+    String?
+    errorCode, // E_GEOFENCE_OUT | E_GPS_ACCURACY | E_DAILY_LIMIT | E_NO_SHIFT
+    Position? pos,
+    double? distM,
+    int? limitPolicy,
+    String? empresaId,
+    String? sucursalId,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'uid': uid,
+        'tipo': tipo,
+        'motivo': motivo,
+        if (errorCode != null) 'error_code': errorCode,
+        if (pos != null) 'ubicacion': GeoPoint(pos.latitude, pos.longitude),
+        if (pos != null) 'precision': pos.accuracy,
+        if (distM != null) 'dist_m': distM,
+        if (limitPolicy != null) 'limit_policy': limitPolicy,
+        if (empresaId != null) 'empresaId': empresaId,
+        if (sucursalId != null) 'sucursalId': sucursalId,
+        'creadoEn': FieldValue.serverTimestamp(),
+        'fuente': 'mobile',
+      };
+      await FirebaseFirestore.instance.collection('marcas_fallidas').add(data);
+    } catch (e) {
+      debugPrint('No se pudo guardar en marcas_fallidas: $e');
+    }
+  }
+
   Future<void> _logFallo({
     required String uid,
-    required String
-    errorCode, // E_GPS_ACCURACY | E_DAILY_LIMIT | E_GEOFENCE_OUT | E_FACE_MISMATCH
+    required String errorCode,
     String? reason,
     double? lat,
     double? lng,
@@ -137,7 +181,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
         "tsCliente": tsCliente,
       });
     } catch (e) {
-      debugPrint('No se pudo registrar marca fallida: $e');
+      debugPrint('No se pudo registrar marca fallida (CF): $e');
     }
   }
 
@@ -183,10 +227,9 @@ class _BotonEntradaState extends State<BotonEntrada> {
     final bottom = _centerBottomOffset(height);
     final sideRaw = (screenW - desiredW) / 2;
     final side = sideRaw.clamp(16.0, screenW * 0.2);
-    final bool error = isError;
-    final Color bgColor = error ? AppColors.claro : baseColor;
-    final Color textColor = error ? Colors.red.shade700 : Colors.white;
-    final BorderSide sideBorder = error
+    final Color bgColor = isError ? AppColors.claro : baseColor;
+    final Color textColor = isError ? Colors.red.shade700 : Colors.white;
+    final BorderSide sideBorder = isError
         ? BorderSide(color: Colors.red.shade600, width: 1.2)
         : BorderSide.none;
 
@@ -259,13 +302,12 @@ class _BotonEntradaState extends State<BotonEntrada> {
           .doc(uid)
           .get();
       if (!doc.exists) return null;
-
       final data = doc.data() ?? <String, dynamic>{};
       final g = (data['geocerca'] as Map?)?.cast<String, dynamic>();
       return _GeoCfg.fromMap(g);
     } catch (e) {
       debugPrint('No se pudo leer geocerca: $e');
-      return null; // ante error de lectura, no bloqueamos localmente
+      return null; // si falla la lectura, no bloqueamos localmente
     }
   }
 
@@ -309,6 +351,27 @@ class _BotonEntradaState extends State<BotonEntrada> {
     return qs.size;
   }
 
+  // ======= ¿Está en turno hoy? (turnos_diarios con usuarioId + fechaTs) =======
+  Future<bool> _estaEnTurnoHoy(String uid) async {
+    try {
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day);
+      final end = start.add(const Duration(days: 1));
+      final qs = await FirebaseFirestore.instance
+          .collection('turnos_diarios')
+          .where('usuarioId', isEqualTo: uid)
+          .where('fechaTs', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('fechaTs', isLessThan: Timestamp.fromDate(end))
+          .limit(1)
+          .get();
+      return qs.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('No se pudo verificar turno: $e');
+      // Si falla la lectura, por seguridad bloqueamos
+      return false;
+    }
+  }
+
   Future<void> _registrar(String tipo) async {
     if (_cargando) return;
     setState(() => _cargando = true);
@@ -316,12 +379,35 @@ class _BotonEntradaState extends State<BotonEntrada> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No autenticado.');
+
+      // ===== -1) Debe estar en turno =====
+      final enTurno = await _estaEnTurnoHoy(user.uid);
+      if (!enTurno) {
+        await _guardarFalloLocal(
+          uid: user.uid,
+          tipo: tipo,
+          motivo: 'No se encuentra en turno',
+          errorCode: 'E_NO_SHIFT',
+        );
+        _showError('No tienes un turno asignado para hoy.');
+        widget.onDone?.call(tipo, false, 'E_NO_SHIFT');
+        return;
+      }
+
       final pos = await _obtenerPosicion();
       final nombre = await _obtenerNombreSeguro(user);
 
       // ===== 0) LÍMITE DIARIO =====
       final marcasHoy = await _contarMarcasHoy(user.uid);
       if (marcasHoy >= _LIMITE_MARCAS_DIA) {
+        await _guardarFalloLocal(
+          uid: user.uid,
+          tipo: tipo,
+          motivo: 'Límite diario de marcas excedido',
+          errorCode: 'E_DAILY_LIMIT',
+          limitPolicy: _LIMITE_MARCAS_DIA,
+          pos: pos,
+        );
         await _logFallo(
           uid: user.uid,
           errorCode: 'E_DAILY_LIMIT',
@@ -335,6 +421,13 @@ class _BotonEntradaState extends State<BotonEntrada> {
 
       // ===== 1) GPS PRECISIÓN =====
       if (pos.accuracy > _ACCURACY_MAX_M) {
+        await _guardarFalloLocal(
+          uid: user.uid,
+          tipo: tipo,
+          motivo: 'Precisión GPS insuficiente',
+          errorCode: 'E_GPS_ACCURACY',
+          pos: pos,
+        );
         await _logFallo(
           uid: user.uid,
           errorCode: 'E_GPS_ACCURACY',
@@ -362,6 +455,14 @@ class _BotonEntradaState extends State<BotonEntrada> {
         final maxM = geo.radiusM + geo.toleranciaM;
 
         if (distM > maxM) {
+          await _guardarFalloLocal(
+            uid: user.uid,
+            tipo: tipo,
+            motivo: 'Fuera de geocerca',
+            errorCode: 'E_GEOFENCE_OUT',
+            pos: pos,
+            distM: distM,
+          );
           await _logFallo(
             uid: user.uid,
             errorCode: 'E_GEOFENCE_OUT',
@@ -373,7 +474,8 @@ class _BotonEntradaState extends State<BotonEntrada> {
             distM: distM,
           );
           _showError(
-            'Estás fuera del perímetro permitido para marcar.\nDistancia ${distM.toStringAsFixed(0)} m (máx ${maxM.toStringAsFixed(0)} m).',
+            'Estás fuera del perímetro permitido para marcar.\n'
+            'Distancia ${distM.toStringAsFixed(0)} m (máx ${maxM.toStringAsFixed(0)} m).',
           );
           widget.onDone?.call(tipo, false, 'E_GEOFENCE_OUT');
           return;
