@@ -12,22 +12,30 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  image_picker: ^0.8.5+3
+  # Firebase (mantengo tus versiones y agrego Storage a la misma generación)
   firebase_core: ^4.2.0
   firebase_auth: ^6.1.1
   cloud_firestore: ^6.0.3
   cloud_functions: ^6.0.4
+  firebase_storage: ^13.0.4
 
+  # Biometría (captura, detección, embeddings y utilidades de imagen)
+  camera: ^0.10.6
+  google_mlkit_face_detection: ^0.13.1
+  tflite_flutter: ^0.12.1
+  image: ^4.2.0
+
+  # Tu stack actual
+  image_picker: ^0.8.5+3
   geolocator: ^11.1.0
   table_calendar: ^3.0.9
   intl: ^0.20.2
-
   characters: ^1.4.0
   material_color_utilities: ^0.11.1
   flutter_speed_dial: ^7.0.0
   flutter_iconpicker: ^3.4.6
   font_awesome_flutter: ^10.7.0
-
+  
 
 dev_dependencies:
   flutter_test:
@@ -41,4 +49,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
-
+    - assets/models/mobilefacenet.tflite

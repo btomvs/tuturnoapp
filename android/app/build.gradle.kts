@@ -15,17 +15,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.tuturno.app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 26
         targetSdk = 35
         multiDexEnabled = true
         versionCode = flutter.versionCode
@@ -33,12 +29,38 @@ android {
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+        getByName("release") {
+            // Firma temporal para poder compilar -- cámbialo cuando tengas tu keystore
             signingConfig = signingConfigs.getByName("debug")
+
+            // Activa minify + shrink para release
+            isMinifyEnabled = true
+            isShrinkResources = true
+
+            // Usa reglas por defecto + tus reglas locales (crea android/app/proguard-rules.pro)
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        getByName("debug") {
+            // Mantén debug sin minificación
+            isMinifyEnabled = false
         }
     }
+
+    // (Opcional) Si alguna lib trae archivos duplicados en META-INF, destápalo:
+    // packaging {
+    //     resources {
+    //         excludes += setOf(
+    //             "META-INF/DEPENDENCIES",
+    //             "META-INF/LICENSE",
+    //             "META-INF/LICENSE.txt",
+    //             "META-INF/NOTICE",
+    //             "META-INF/NOTICE.txt"
+    //         )
+    //     }
+    // }
 }
 
 flutter {
@@ -46,8 +68,11 @@ flutter {
 }
 
 dependencies {
+    // Firebase BoM — alinea versiones de Firebase nativo
     implementation(platform("com.google.firebase:firebase-bom:33.1.1"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-messaging")
-    
+
+    // (No necesitas declarar explícitamente ML Kit/TFLite aquí;
+    // las dependencias las arrastran los paquetes Flutter que ya agregaste.)
 }

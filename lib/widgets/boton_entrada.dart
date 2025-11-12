@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:tuturnoapp/core/app_colors.dart';
+import 'package:tuturnoapp/widgets/VerificarBiometriaScreen.dart';
+import 'package:tuturnoapp/screens/enrolar_trabajador_screen.dart';
 import 'package:tuturnoapp/widgets/reloj.dart'; // JornadaService
 
 /// =========================
@@ -121,7 +123,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
     required String tipo, // 'entrada' | 'salida'
     required String motivo, // texto visible
     String?
-    errorCode, // E_GEOFENCE_OUT | E_GPS_ACCURACY | E_DAILY_LIMIT | E_NO_SHIFT
+    errorCode, // E_GEOFENCE_OUT | E_GPS_ACCURACY | E_DAILY_LIMIT | E_NO_SHIFT | E_FACE_NO_MATCH | E_FACE_NOT_ENROLLED
     Position? pos,
     double? distM,
     int? limitPolicy,
@@ -185,7 +187,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
     }
   }
 
-  // ================== Helpers de alerta centrada ==================
+  // ================== Helpers de UI ==================
   double _snackWidthFor(String msg, {double min = 220, double max = 520}) {
     const textStyle = TextStyle(fontSize: 16, fontWeight: FontWeight.w700);
     final tp = TextPainter(
@@ -307,7 +309,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
       return _GeoCfg.fromMap(g);
     } catch (e) {
       debugPrint('No se pudo leer geocerca: $e');
-      return null; // si falla la lectura, no bloqueamos localmente
+      return null;
     }
   }
 
@@ -331,7 +333,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
         if (full.isNotEmpty) nombre = full;
       }
     } catch (e) {
-      debugPrint('Aviso: lectura de "usuarios" falló: $e');
+      debugPrint('Perfil "usuarios" falló: $e');
       _showInfo('No se pudo leer tu perfil. Usaremos un nombre genérico.');
     }
     return nombre;
@@ -351,7 +353,7 @@ class _BotonEntradaState extends State<BotonEntrada> {
     return qs.size;
   }
 
-  // ======= ¿Está en turno hoy? (turnos_diarios con usuarioId + fechaTs) =======
+  // ======= ¿Está en turno hoy? =======
   Future<bool> _estaEnTurnoHoy(String uid) async {
     try {
       final now = DateTime.now();
@@ -367,11 +369,46 @@ class _BotonEntradaState extends State<BotonEntrada> {
       return qs.docs.isNotEmpty;
     } catch (e) {
       debugPrint('No se pudo verificar turno: $e');
-      // Si falla la lectura, por seguridad bloqueamos
       return false;
     }
   }
 
+  // ================== Biometría helpers ==================
+  Future<bool> _tieneBiometria(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(uid)
+          .get();
+      final emb = (doc.data()?['biometria']?['embedding'] as List?)
+          ?.cast<dynamic>();
+      return emb != null && emb.length == 128;
+    } catch (e) {
+      debugPrint('Error leyendo biometría: $e');
+      return false;
+    }
+  }
+
+  Future<bool?> _irAEnrolar() async {
+    return Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const EnrolarTrabajadorScreen(),
+      ),
+    );
+  }
+
+  Future<bool> _validarBiometria(BuildContext context) async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => VerificarBiometriaScreen(onVerified: () async {}),
+      ),
+    );
+    return ok == true;
+  }
+
+  // ================== Flujo principal (BIOMÉTRICA PRIMERO) ==================
   Future<void> _registrar(String tipo) async {
     if (_cargando) return;
     setState(() => _cargando = true);
@@ -380,7 +417,48 @@ class _BotonEntradaState extends State<BotonEntrada> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('No autenticado.');
 
-      // ===== -1) Debe estar en turno =====
+      // A) ENROLAMIENTO
+      bool enrolado = await _tieneBiometria(user.uid);
+      if (!enrolado) {
+        if (mounted) setState(() => _cargando = false); // liberar UI
+        final hizo = await _irAEnrolar();
+        if (!mounted) return;
+        setState(() => _cargando = true);
+        if (hizo == true) {
+          enrolado = await _tieneBiometria(user.uid);
+        }
+      }
+      if (!enrolado) {
+        await _guardarFalloLocal(
+          uid: user.uid,
+          tipo: tipo,
+          motivo: 'Usuario sin enrolamiento biométrico',
+          errorCode: 'E_FACE_NOT_ENROLLED',
+        );
+        _showError('Debes enrolarte para marcar.');
+        widget.onDone?.call(tipo, false, 'E_FACE_NOT_ENROLLED');
+        return;
+      }
+
+      // B) VERIFICACIÓN FACIAL
+      if (mounted) setState(() => _cargando = false);
+      final okBio = await _validarBiometria(context);
+      if (!mounted) return;
+      setState(() => _cargando = true);
+
+      if (!okBio) {
+        await _guardarFalloLocal(
+          uid: user.uid,
+          tipo: tipo,
+          motivo: 'Verificación biométrica fallida o cancelada',
+          errorCode: 'E_FACE_NO_MATCH',
+        );
+        _showError('No se pudo validar tu rostro.');
+        widget.onDone?.call(tipo, false, 'E_FACE_NO_MATCH');
+        return;
+      }
+
+      // C) REGLAS (turno / GPS / límite / geocerca)
       final enTurno = await _estaEnTurnoHoy(user.uid);
       if (!enTurno) {
         await _guardarFalloLocal(
@@ -397,7 +475,6 @@ class _BotonEntradaState extends State<BotonEntrada> {
       final pos = await _obtenerPosicion();
       final nombre = await _obtenerNombreSeguro(user);
 
-      // ===== 0) LÍMITE DIARIO =====
       final marcasHoy = await _contarMarcasHoy(user.uid);
       if (marcasHoy >= _LIMITE_MARCAS_DIA) {
         await _guardarFalloLocal(
@@ -419,7 +496,6 @@ class _BotonEntradaState extends State<BotonEntrada> {
         return;
       }
 
-      // ===== 1) GPS PRECISIÓN =====
       if (pos.accuracy > _ACCURACY_MAX_M) {
         await _guardarFalloLocal(
           uid: user.uid,
@@ -443,7 +519,6 @@ class _BotonEntradaState extends State<BotonEntrada> {
         return;
       }
 
-      // ===== 2) GEOFENCE =====
       final geo = await _leerGeocerca(user.uid);
       if (geo != null && geo.enabled) {
         final distM = Geolocator.distanceBetween(
@@ -453,7 +528,6 @@ class _BotonEntradaState extends State<BotonEntrada> {
           geo.lng,
         );
         final maxM = geo.radiusM + geo.toleranciaM;
-
         if (distM > maxM) {
           await _guardarFalloLocal(
             uid: user.uid,
@@ -473,41 +547,28 @@ class _BotonEntradaState extends State<BotonEntrada> {
             accuracyM: pos.accuracy,
             distM: distM,
           );
-          _showError(
-            'Estás fuera del perímetro permitido para marcar.\n'
-            'Distancia ${distM.toStringAsFixed(0)} m (máx ${maxM.toStringAsFixed(0)} m).',
-          );
+          _showError('Estás fuera del perímetro permitido para marcar.');
           widget.onDone?.call(tipo, false, 'E_GEOFENCE_OUT');
           return;
         }
       }
 
-      // ===== 3) Escritura en MARCAJE =====
-      try {
-        await FirebaseFirestore.instance.collection('marcaje').add({
-          'uid': user.uid,
-          'nombre': nombre,
-          'tipo': tipo, // 'entrada' | 'salida'
-          'ubicacion': GeoPoint(pos.latitude, pos.longitude),
-          'precision': pos.accuracy,
-          'creadoEn': FieldValue.serverTimestamp(),
-          'fuente': 'mobile',
-        });
-      } catch (e) {
-        _showError('Permiso denegado al escribir "marcaje".');
-        rethrow;
-      }
+      // D) MARCAJE
+      await FirebaseFirestore.instance.collection('marcaje').add({
+        'uid': user.uid,
+        'nombre': nombre,
+        'tipo': tipo,
+        'ubicacion': GeoPoint(pos.latitude, pos.longitude),
+        'precision': pos.accuracy,
+        'creadoEn': FieldValue.serverTimestamp(),
+        'fuente': 'mobile',
+      });
 
-      // ===== 4) Escritura en JORNADAS =====
-      try {
-        if (tipo == 'entrada') {
-          await _srv.entrada(user.uid);
-        } else {
-          await _srv.salida(user.uid);
-        }
-      } catch (e) {
-        _showError('Permiso denegado en "jornadas".');
-        rethrow;
+      // E) JORNADAS
+      if (tipo == 'entrada') {
+        await _srv.entrada(user.uid);
+      } else {
+        await _srv.salida(user.uid);
       }
 
       _showSuccess('¡Tu marca de $tipo ha sido exitosa!');
